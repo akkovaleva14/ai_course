@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# IDE
+.idea/
+*.iml
+
+# Local config
+local.properties
+
+# Certificates / truststores
+*.jks
+*.crt
+*.pem
+*.p12
+
+# OS
+.DS_Store
