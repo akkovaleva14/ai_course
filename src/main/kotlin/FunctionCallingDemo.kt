@@ -1,25 +1,12 @@
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.treeToValue
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class WeatherArguments(
-    val city: String? = null
-)
-
-data class WeatherResult(
-    val city: String,
-    val temperatureC: Int?,
-    val condition: String,
-    val precipitation: String? = null,
-    val windSpeedMs: Int? = null
-)
 
 fun runFunctionCallingDemo(client: GigaChatClient, model: String) {
     val mapper = jacksonObjectMapper()
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
+    val weatherService = WeatherService()
     val userQuestion = "Какая погода в Москве?"
 
     println("User: $userQuestion")
@@ -94,7 +81,7 @@ fun runFunctionCallingDemo(client: GigaChatClient, model: String) {
     println("Model requested function call: $functionName(city=$city)")
     println()
 
-    val functionResult = getWeather(city)
+    val functionResult = weatherService.getWeather(city)
     val functionResultJson = mapper.writeValueAsString(functionResult)
 
     println("Function result:")
@@ -126,48 +113,4 @@ fun runFunctionCallingDemo(client: GigaChatClient, model: String) {
 
     println("Final answer:")
     println(finalAnswer)
-}
-
-fun getWeather(city: String): WeatherResult {
-    return when (city.trim().lowercase()) {
-        "москва", "moscow" -> WeatherResult(
-            city = "Москва",
-            temperatureC = -2,
-            condition = "snow",
-            precipitation = "snow",
-            windSpeedMs = 5
-        )
-
-        "санкт-петербург", "saint petersburg", "st. petersburg", "saint-petersburg" -> WeatherResult(
-            city = "Санкт-Петербург",
-            temperatureC = 0,
-            condition = "rain",
-            precipitation = "rain",
-            windSpeedMs = 7
-        )
-
-        "казань", "kazan" -> WeatherResult(
-            city = "Казань",
-            temperatureC = -5,
-            condition = "clear",
-            precipitation = "none",
-            windSpeedMs = 3
-        )
-
-        "новосибирск", "novosibirsk" -> WeatherResult(
-            city = "Новосибирск",
-            temperatureC = -8,
-            condition = "cloudy",
-            precipitation = "none",
-            windSpeedMs = 4
-        )
-
-        else -> WeatherResult(
-            city = city,
-            temperatureC = null,
-            condition = "unknown",
-            precipitation = null,
-            windSpeedMs = null
-        )
-    }
 }

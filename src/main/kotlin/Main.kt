@@ -2,6 +2,13 @@ import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     try {
+        when (args.firstOrNull()) {
+            "mcp-server" -> {
+                McpServer().run()
+                return
+            }
+        }
+
         val authorizationKey = System.getenv("GIGACHAT_AUTH_KEY")
             ?.trim()
             ?.removePrefix("Basic ")
@@ -53,6 +60,7 @@ fun main(args: Array<String>) {
                 println("  chat")
                 println("  structured-output")
                 println("  function-calling")
+                println("  mcp-server")
             }
         }
     } catch (t: Throwable) {

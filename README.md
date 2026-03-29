@@ -7,6 +7,7 @@
 
 - **structured output** с разбором JSON в Kotlin data class
 - **function calling** с нативным вызовом локальной функции через формат **GigaChat API**
+- **MCP server** по протоколу **Model Context Protocol** через **stdio**
 
 ---
 
@@ -24,6 +25,7 @@
 - смену **system prompt**
 - demo-сценарий для **structured output**
 - demo-сценарий для **function calling**
+- demo-сценарий для **MCP server** с tool `get_weather`
 
 ---
 
@@ -36,6 +38,7 @@
 - **Gradle 8.10.2**
 - **OkHttp** для HTTP-запросов
 - **Jackson** для JSON
+- **MCP Inspector** для проверки MCP server
 
 ---
 
@@ -50,6 +53,11 @@ gigachat-cli/
 ├── README.md
 ├── homework-2-task1.md
 ├── lessons_1.md
+├── lessons_3.md
+├── screenshots/
+│   ├── tools_call.png
+│   ├── tools_list_1.png
+│   └── tools_list_2.png
 └── src/
     └── main/
         └── kotlin/
@@ -58,7 +66,10 @@ gigachat-cli/
             ├── GigaChatClient.kt
             ├── Models.kt
             ├── StructuredOutputDemo.kt
-            └── FunctionCallingDemo.kt
+            ├── FunctionCallingDemo.kt
+            ├── WeatherService.kt
+            ├── McpModels.kt
+            └── McpServer.kt
 ```
 
 > Допустимо, если часть demo-кода находится не в отдельных файлах, а в уже существующих Kotlin-файлах. Главное, чтобы режимы запуска работали корректно.
@@ -72,6 +83,7 @@ gigachat-cli/
 - **JDK 17**
 - доступ в интернет
 - ключ авторизации для GigaChat API
+- **Node.js / npm** — для запуска **MCP Inspector**
 
 Проверка Java:
 
@@ -82,11 +94,19 @@ java --version
 
 Ожидается, что и `java`, и `Gradle JVM` используют **Java 17**.
 
+Проверка Node.js и npm:
+
+```bash
+node -v
+npm -v
+npx -v
+```
+
 ---
 
 ## Переменные окружения
 
-Для запуска используется переменная:
+Для запуска GigaChat-режимов используется переменная:
 
 - `GIGACHAT_AUTH_KEY` — Base64 от строки `clientId:clientSecret`
 
@@ -112,6 +132,10 @@ export GIGACHAT_UNSAFE_SSL=true
 
 > Этот режим нужен только для локальной диагностики и разработки.
 
+### Важное замечание для MCP server
+
+Режим `mcp-server` не использует GigaChat API напрямую, поэтому для его локальной проверки переменная `GIGACHAT_AUTH_KEY` не требуется.
+
 ---
 
 ## Сборка проекта
@@ -132,11 +156,12 @@ export GIGACHAT_UNSAFE_SSL=true
 
 ## Режимы запуска
 
-Проект поддерживает три основных режима:
+Проект поддерживает четыре основных режима:
 
 - `chat` — интерактивный CLI-чат
 - `structured-output` — demo structured output
 - `function-calling` — demo function calling
+- `mcp-server` — MCP-сервер по stdio с tool `get_weather`
 
 ---
 
@@ -200,13 +225,20 @@ You:
 ./gradlew run --args="function-calling"
 ```
 
+или:
+
+```bash
+./gradlew run --args="mcp-server"
+```
+
 Но есть важное отличие:
 
 - `./gradlew run --args="chat"` в текущем окружении **не поддерживает интерактивный ввод** и завершает программу после старта
 - `./gradlew run --args="structured-output"` работает корректно
 - `./gradlew run --args="function-calling"` работает корректно
+- `./gradlew run --args="mcp-server"` в текущем окружении тоже может сразу завершаться, если Gradle не удерживает `stdin` для stdio-сервера
 
-Поэтому для обычного CLI-чата рекомендуется использовать именно:
+Поэтому для обычного CLI-чата и для MCP server рекомендуется использовать именно:
 
 ```bash
 ./build/install/gigachat-cli/bin/gigachat-cli
@@ -482,6 +514,188 @@ Final answer:
 
 ---
 
+## MCP Server Demo
+
+Для homework 3 в проект добавлен отдельный режим запуска MCP-сервера:
+
+```bash
+./gradlew clean installDist
+./build/install/gigachat-cli/bin/gigachat-cli mcp-server
+```
+
+В этом режиме приложение запускается как **stdio MCP server** и ожидает JSON-RPC сообщения от MCP-клиента.
+
+Сервер реализует минимальный набор MCP-методов:
+
+- `initialize`
+- `notifications/initialized`
+- `tools/list`
+- `tools/call`
+
+### Tool, который предоставляет сервер
+
+Сервер публикует один tool:
+
+- `get_weather`
+
+### Что делает tool
+
+Tool `get_weather` принимает аргумент:
+
+```json
+{
+  "city": "Москва"
+}
+```
+
+и возвращает мок-данные о погоде, например:
+
+```json
+{
+  "city": "Москва",
+  "temperatureC": -2,
+  "condition": "snow",
+  "precipitation": "snow",
+  "windSpeedMs": 5
+}
+```
+
+### Что именно демонстрирует этот режим
+
+Этот режим показывает базовую интеграцию с **Model Context Protocol**:
+
+- сервер работает по **stdio**
+- принимает JSON-RPC сообщения из `stdin`
+- отправляет JSON-RPC ответы в `stdout`
+- публикует список доступных tools
+- вызывает локальную Kotlin-логику по запросу клиента
+
+То есть используется уже не формат function calling GigaChat API, а отдельный протокол взаимодействия между **MCP client** и **MCP server**.
+
+### Важное замечание по stdio
+
+В режиме `mcp-server` в `stdout` должны попадать только JSON-RPC ответы.  
+Поэтому служебные логи сервера выводятся в `stderr`.
+
+Это важно для корректной работы MCP Inspector и других stdio-клиентов.
+
+### Почему для запуска лучше использовать installDist script
+
+В текущем окружении режим `mcp-server`, как и интерактивный `chat`, не следует запускать через:
+
+```bash
+./gradlew run --args="mcp-server"
+```
+
+потому что Gradle в этом окружении может не удерживать интерактивный `stdin` так, как требуется stdio-серверу.  
+Из-за этого сервер получает `EOF` и завершается сразу после старта.
+
+Поэтому для локальной проверки рекомендуется использовать launch script после `installDist`:
+
+```bash
+./build/install/gigachat-cli/bin/gigachat-cli mcp-server
+```
+
+---
+
+## Проверка MCP server через Inspector
+
+Для проверки использовался **MCP Inspector**.
+
+### Установка и запуск Inspector
+
+Если `npx` ещё не установлен, нужно установить **Node.js / npm**.
+
+Проверка:
+
+```bash
+node -v
+npm -v
+npx -v
+```
+
+Запуск Inspector:
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+После запуска Inspector открывается в браузере локально.
+
+### Подключение сервера в Inspector
+
+В Inspector нужно указать:
+
+| **Поле** | **Значение** |
+|---|---|
+| **Transport Type** | `STDIO` |
+| **Command** | `./build/install/gigachat-cli/bin/gigachat-cli` |
+| **Arguments** | `mcp-server` |
+
+Краткий смысл этой таблицы: Inspector сам запускает локальный процесс сервера и подключается к нему по stdio.
+
+### Что было проверено
+
+Через Inspector были успешно проверены:
+
+- подключение к серверу
+- `tools/list`
+- `tools/call`
+
+### Скриншоты проверки
+
+Ниже приведены скриншоты из папки `screenshots/`, подтверждающие успешную работу MCP server в Inspector.
+
+#### 1. Список доступных tools
+
+На этом скриншоте видно, что Inspector успешно подключился к серверу и получил результат `tools/list`, где опубликован tool `get_weather`.
+
+![MCP Inspector tools list](screenshots/tools_list_2.png)
+
+#### 2. Вкладка Tools и ручной запуск tool
+
+На этом скриншоте видно, что tool `get_weather` отображается во вкладке **Tools**, принимает параметр `city`, и успешно вызывается из UI Inspector.
+
+![MCP Inspector run tool](screenshots/tools_list_1.png)
+
+#### 3. Прямой вызов `tools/call`
+
+На этом скриншоте показан JSON-запрос `tools/call` с аргументом `"city": "Москва"` и корректный JSON-ответ сервера.
+
+![MCP Inspector tools call](screenshots/tools_call.png)
+
+### Ожидаемый результат `tools/list`
+
+Inspector должен показать tool:
+
+```text
+get_weather
+```
+
+### Пример вызова `tools/call`
+
+Аргументы:
+
+```json
+{
+  "city": "Москва"
+}
+```
+
+Ожидаемый результат:
+
+```json
+{
+  "city": "Москва",
+  "temperatureC": -2,
+  "condition": "snow",
+  "precipitation": "snow",
+  "windSpeedMs": 5
+}
+```
+
+---
+
 ## Использование CLI
 
 После запуска приложение выводит текущее состояние и список команд.
@@ -586,7 +800,7 @@ applicationDefaultJvmArgs = listOf(
 
 Ввод из консоли читается через `BufferedReader` + `InputStreamReader(System.in, Charsets.UTF_8)`.
 
-Это уменьшает риск проблем с кодировкой в интерактивном режиме.
+Это уменьшает риск проблем с кодировкой в интерактивном режиме и в stdio-сценариях.
 
 ---
 
@@ -627,7 +841,17 @@ export GIGACHAT_UNSAFE_SSL=true
 ./build/install/gigachat-cli/bin/gigachat-cli
 ```
 
-### 4. Gradle запускается не на той версии Java
+### 4. `./gradlew run --args="mcp-server"` сразу завершает программу
+
+В текущем окружении Gradle также может не передавать `stdin` так, как ожидает stdio MCP server.  
+В этом случае используйте:
+
+```bash
+./gradlew clean installDist
+./build/install/gigachat-cli/bin/gigachat-cli mcp-server
+```
+
+### 5. Gradle запускается не на той версии Java
 
 Проверьте:
 
@@ -638,7 +862,7 @@ java --version
 
 Если Gradle использует не Java 17, настройте `JAVA_HOME` в `.zshrc` или зафиксируйте JDK через `gradle.properties`.
 
-### 5. Structured output не парсится в JSON
+### 6. Structured output не парсится в JSON
 
 Если модель вернула JSON с markdown-обёрткой или с лишним текстом, приложение использует defensive extraction для извлечения JSON из raw response.
 
@@ -656,7 +880,7 @@ java --version
 - `priority`
 - `summary`
 
-### 6. Structured output не проходит парсинг в Kotlin object
+### 7. Structured output не проходит парсинг в Kotlin object
 
 Проверьте, что значения enum-полей совпадают с ожидаемыми:
 
@@ -666,7 +890,7 @@ java --version
 
 Если модель вернула другие значения, Jackson не сможет корректно десериализовать ответ в `ReviewClassification`.
 
-### 7. Function calling demo не срабатывает
+### 8. Function calling demo не срабатывает
 
 Проверьте:
 
@@ -679,38 +903,122 @@ java --version
 
 Если API возвращает ошибку 422, обычно проблема в формате результата функции или в структуре сообщений второго запроса.
 
+### 9. `npx` не найден при запуске Inspector
+
+Если команда:
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+не находится, значит не установлен **Node.js / npm** или они не попали в `PATH`.
+
+Проверьте:
+
+```bash
+node -v
+npm -v
+npx -v
+```
+
+При необходимости установите Node.js, например через Homebrew:
+
+```bash
+brew install node
+```
+
+### 10. Inspector не подключается к MCP server
+
+Проверьте:
+
+- что в Inspector выбран **Transport Type = STDIO**
+- что в поле **Command** указан корректный путь к `./build/install/gigachat-cli/bin/gigachat-cli`
+- что в поле **Arguments** указано `mcp-server`
+- что сервер не запущен вручную в другом терминале для того же stdio-сеанса
+- что в `stdout` сервера не печатаются обычные логи
+
+Для stdio MCP server все служебные сообщения должны уходить в `stderr`, а в `stdout` — только JSON-RPC ответы.
+
 ---
 
 ## Что сделано по домашнему заданию
 
-В рамках homework 2 реализованы:
+Ниже — структурированный обзор того, что было реализовано в рамках **homework 1, homework 2 и homework 3**.
 
-1. **CLI chat с GigaChat API**
-    - ввод текста с консоли
-    - хранение истории в памяти
-    - смена модели, temperature и system prompt во время работы
+### 1. Homework 1: CLI чат с GigaChat API
+В рамках первого домашнего задания реализовано базовое консольное приложение для работы с **GigaChat API**.
 
-2. **Задание 1: Prompting Techniques**
-    - добавлен файл `homework-2-task1.md`
-    - выбрана одна задача
-    - применены 5 техник промптинга
-    - для каждой техники показаны before / after и вывод
+- поддержан ввод текста с консоли
+- запросы отправляются в API, а ответы выводятся в терминал
+- история диалога хранится в памяти
+- во время работы можно менять:
+    - модель (**Lite / Pro / Max**)
+    - **temperature**
+    - **system prompt**
+- приложение соответствует формату простого CLI-чата, как требовалось в задании
 
-3. **Задание 2: Structured Output**
-    - добавлен demo-режим `structured-output`
-    - модель возвращает JSON по заданной схеме
-    - JSON при необходимости извлекается из raw response
-    - JSON парсится в Kotlin data class с enum-полями
-    - результат валидируется и выводится в читаемом виде
+Кроме основного кода, добавлен файл **`lessons_1.md`** с ответами на вопросы из homework 1, включая эксперименты по:
+- влиянию **temperature**
+- влиянию **system prompt**
+- сравнению моделей **Lite / Pro / Max**
+- особенностям параметров и поведения модели
 
-4. **Задание 3: Function Calling**
-    - добавлен demo-режим `function-calling`
-    - функция описывается через `functions` в формате GigaChat API
-    - запрос отправляется с `function_call: "auto"`
-    - приложение проверяет `finish_reason == "function_call"`
-    - приложение извлекает `message.function_call`
-    - вызывается локальная функция `getWeather(city)`
-    - результат сериализуется в JSON и отправляется обратно модели
-    - модель формирует финальный ответ
+### 2. Homework 2: Техники промптинга
+Во втором домашнем задании выполнена отдельная практическая часть по **prompting techniques**.
 
----
+- добавлен файл **`homework-2-task1.md`**
+- выбрана одна задача из предложенного списка
+- для этой задачи применены **5 техник промптинга**
+- для каждой техники показаны:
+    - вариант **before** — без техники
+    - вариант **after** — с техникой
+    - краткий вывод по результату
+- в конце добавлен общий вывод о том, какие техники дали наибольший эффект
+
+### 3. Homework 2: Structured Output
+Также в homework 2 реализован demo-режим **`structured-output`**.
+
+- модель получает инструкцию вернуть ответ в виде **строгого JSON**
+- используется фиксированная схема полей
+- при необходимости применяется defensive extraction JSON из raw response
+- JSON парсится в Kotlin data class
+- результат валидируется и выводится в читаемом виде
+
+### 4. Homework 2: Function Calling
+Ещё одна часть homework 2 — demo-режим **`function-calling`**.
+
+- реализован нативный сценарий function calling через **GigaChat API**
+- функция описывается через поле `functions`
+- запрос отправляется с `function_call: "auto"`
+- приложение обрабатывает ответ модели с `finish_reason = "function_call"`
+- извлекаются имя функции и аргументы
+- вызывается локальная Kotlin-функция `getWeather(city)`
+- результат функции сериализуется в JSON и передаётся обратно модели
+- модель формирует финальный ответ пользователю
+
+### 5. Homework 3: MCP
+В рамках homework 3 добавлен режим **`mcp-server`**.
+
+- реализован **stdio MCP server** на Kotlin
+- поддержаны методы:
+    - `initialize`
+    - `notifications/initialized`
+    - `tools/list`
+    - `tools/call`
+- опубликован tool **`get_weather`**
+- tool вызывает локальную Kotlin-логику и возвращает структурированный результат
+- работа сервера проверена через **MCP Inspector**
+- в репозиторий добавлены скриншоты успешной проверки в папке **`screenshots/`**
+
+### 6. Homework 3: MCP / Skills analysis
+Дополнительно в homework 3 добавлен файл **`lessons_3.md`**.
+
+- изучены каталоги **MCP-серверов**
+- изучены **Skills для Claude Code**
+- выбраны и описаны наиболее интересные решения
+- основной акцент сделан на вариантах, которые полезны для **Android-разработки**
+- по каждому выбранному варианту зафиксированы:
+    - ссылка
+    - назначение
+    - практическая польза
+    - причина выбора
