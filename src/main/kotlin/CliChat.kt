@@ -136,12 +136,13 @@ class CliChat(
             addAll(history)
         }
 
-        val answer = client.ask(
+        val response = client.ask(
             model = selectedModel,
             temperature = temperature,
             messages = requestMessages
         )
 
+        val answer = response.firstMessageContent()
         history += RequestMessage(role = "assistant", content = answer)
         println("GigaChat: $answer")
     }

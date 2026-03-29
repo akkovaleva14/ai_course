@@ -52,14 +52,18 @@ class GigaChatClient(
     fun ask(
         model: String,
         temperature: Double,
-        messages: List<RequestMessage>
-    ): String {
+        messages: List<RequestMessage>,
+        functions: List<FunctionDefinition>? = null,
+        functionCall: String? = null
+    ): GigaChatResponse {
         val token = getAccessToken()
 
         val payload = GigaChatRequest(
             model = model,
             temperature = temperature,
-            messages = messages
+            messages = messages,
+            functions = functions,
+            function_call = functionCall
         )
 
         val json = mapper.writeValueAsString(payload)
@@ -79,9 +83,7 @@ class GigaChatClient(
                 error("Chat API error ${response.code}: ${body.take(1000)}")
             }
 
-            val parsed: GigaChatResponse = mapper.readValue(body)
-            return parsed.choices.firstOrNull()?.message?.content
-                ?: error("Empty response from GigaChat")
+            return mapper.readValue(body)
         }
     }
 
